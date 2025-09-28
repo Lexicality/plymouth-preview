@@ -17,16 +17,18 @@ else
 	exit 1
 fi
 if [[ $RCPATH != "None" ]]; then
-	grep -qxF 'PATH="$HOME/.local/bin:${PATH}"' "$RCPATH" || echo 'PATH="$HOME/.local/bin:${PATH}"' >> "$RCPATH"
-	grep -qxF 'export PATH' "$HOME/.bashrc" || echo 'export PATH' >> "$RCPATH"
-	
+	grep -qxF 'PATH="$HOME/.local/bin:${PATH}"' "$RCPATH" || echo 'PATH="$HOME/.local/bin:${PATH}"' >>"$RCPATH"
+	grep -qxF 'export PATH' "$HOME/.bashrc" || echo 'export PATH' >>"$RCPATH"
+
 	echo "[Info]: Added path '~/.local/bin/' to your .bashrc"
 fi
 
 echo "[Info]: The next step might ask for your password to create a symbolic link."
 sudo ln -sf "$HOME/.local/bin/plymouth-preview" /usr/local/bin
 
-if [[ $SHELL = *"bash" ]]; then source "${HOME}/.bashrc"
-elif [[ $SHELL = *"zsh" ]]; then source "${HOME}/.zshrc"
+if [[ $SHELL = *"bash" ]]; then
+	source "${HOME}/.bashrc"
+elif [[ $SHELL = *"zsh" ]]; then
+	source "${HOME}/.zshrc"
 fi
 echo "[Info]: Successfully installed, enjoy!"
