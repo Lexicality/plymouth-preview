@@ -37,7 +37,16 @@ async def _async_main(args: Args):
         if not await _launch_and_run("plymouth", "--show-splash"):
             logger.error("Failed to launch the splash!")
             return
-        await _main_startup(args)
+        match args.mode:
+            case "startup":
+                await _main_startup(args)
+            case "shutdown" | "reboot":
+                await _main_shutdown(args)
+            case "updates" | "system-upgrade" | "firmware-upgrade" | "system-reset":
+                await _main_updates(args)
+            case what:
+                logger.error("Unknown mode %s", what)
+                return
     finally:
         if plymouthd.returncode is not None:
             return
@@ -65,6 +74,35 @@ async def _main_startup(args: Args):
             logger.error("Failed to run update - did plymouth crash?")
             return
         await asyncio.sleep(1)
+
+
+async def _main_shutdown(args: Args):
+    for i in range(args.duration):
+        if not await _launch_and_run(
+            "plymouth",
+            "update",
+            f"--status={args.mode}: {i}",
+        ):
+            logger.error("Failed to talk to Plymouth, did it crash?")
+            return
+        await asyncio.sleep(1)
+
+
+async def _main_updates(args: Args):
+    sleep_amount = args.duration / 101
+    for i in range(101):
+        if not await _launch_and_run("plymouth", "system-update", f"--progress={i}"):
+            logger.error("Failed to talk to Plymouth, did it crash?")
+            return
+
+        if not await _launch_and_run(
+            "plymouth",
+            "display-message",
+            f"--text={args.mode}: {i:02}%",
+        ):
+            logger.error("Failed to talk to Plymouth, did it crash?")
+            return
+        await asyncio.sleep(sleep_amount)
 
 
 async def _launch_and_run(command: str, *args: str) -> bool:
@@ -116,6 +154,9 @@ async def _launch_plymouthd(args: Args) -> subprocess.Process:
         process_args.append(f"--boot-log={args.ply_boot_log_file}")
     else:
         process_args.append("--no-boot-log")
+
+    if args.mode != "startup":
+        process_args.append(f"--mode={args.mode}")
 
     if args.theme:
         kernel_command_line.append(f"plymouth.splash={args.theme}")
@@ -180,6 +221,7 @@ def _check_root():
 
 class Args(argparse.Namespace):
     duration: int
+    mode: str
     theme: str | None
     scale: int | None
     log_level: str
@@ -209,6 +251,21 @@ def _setup_args() -> Args:
         nargs="?",
         default=10,
         help="Number of seconds to display the splash screen",
+    )
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        default="startup",
+        choices=[
+            "startup",
+            "shutdown",
+            "reboot",
+            "updates",
+            "system-upgrade",
+            "firmware-upgrade",
+            "system-reset",
+        ],
+        help="What mode to display the splash screen in",
     )
     parser.add_argument("--theme", help="Theme name to preview")
     parser.add_argument(
