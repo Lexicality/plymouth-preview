@@ -88,6 +88,11 @@ async def _launch_plymouthd(args: Args) -> subprocess.Process:
     else:
         process_args.append("--no-boot-log")
 
+    if args.theme:
+        kernel_command_line.append(f"plymouth.splash={args.theme}")
+    if args.scale:
+        kernel_command_line.append(f"plymouth.force-scale={args.scale}")
+
     process_args.append("--kernel-command-line=" + " ".join(kernel_command_line))
 
     logger.info("Launching plymouthd")
@@ -148,6 +153,8 @@ def _check_root():
 
 class Args(argparse.Namespace):
     duration: int
+    theme: str | None
+    scale: int | None
     log_level: str
     ply_debug: bool
     ply_debug_file: str | None
@@ -175,6 +182,12 @@ def _setup_args() -> Args:
         nargs="?",
         default=10,
         help="Number of seconds to display the splash screen",
+    )
+    parser.add_argument("--theme", help="Theme name to preview")
+    parser.add_argument(
+        "--scale",
+        type=_positive_integer,
+        help="Force a scaling factor. Fractional values not supported.",
     )
     parser.add_argument(
         "--log-level",
