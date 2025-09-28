@@ -1,0 +1,35 @@
+[project]
+name = "plymouth-preview"
+version = "0.0.0"
+description = "Allows you to easily preview your Plymouth theme from the comfort of your desktop"
+authors = [
+	{ name = "_khAttAm_" },
+	{ name = "Lexi Robinson", email = "lexi@lexi.org.uk" },
+]
+license = "GPL-3.0-or-later"
+# Debian 12 support py311 so let's pick that as an arbitrary baseline
+requires-python = ">=3.11"
+
+
+[dependency-groups]
+lint = ["ruff==v0.13.2"]
+
+
+[tool.ruff.lint]
+extend-select = [
+	"COM", # flake8-commas
+	"DJ",  # flake8-django
+	"DTZ", # flake8-datetimez
+	"FA",  # flake8-future-annotations
+	"G",   # flake8-logging-format
+	"I",   # isort
+	"ICN", # flake8-import-conventions
+	"ISC", # flake8-implicit-str-concat
+	"LOG", # flake8-logging
+	"T10", # flake8-debugger
+	"T20", # flake8-print
+	"UP",  # pyupgrade
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
