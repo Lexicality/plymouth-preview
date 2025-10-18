@@ -69,11 +69,32 @@ async def _async_main(args: Args):
 
 
 async def _main_startup(args: Args):
+    ask_question = args.ask_question
+    ask_password = args.ask_password
     for i in range(args.duration):
         if not await _launch_and_run("plymouth", f"--update=test{i}"):
             logger.error("Failed to run update - did plymouth crash?")
             return
         await asyncio.sleep(1)
+        # Ask after the first second
+        if ask_question is not None:
+            if not await _ask_question(
+                "ask-question",
+                "What is the answer?",
+                ask_question,
+            ):
+                logger.error("Failed to ask a question- did plymouth crash?")
+                return
+            ask_question = None
+        if ask_password is not None:
+            if not await _ask_question(
+                "ask-for-password",
+                "What is the password?",
+                ask_password,
+            ):
+                logger.error("Failed to ask a question- did plymouth crash?")
+                return
+            ask_password = None
 
 
 async def _main_shutdown(args: Args):
@@ -111,10 +132,55 @@ async def _launch_and_run(command: str, *args: str) -> bool:
     return program.returncode == 0
 
 
+async def _ask_question(type: str, prompt: str, answer: str, retries=3) -> bool:
+    answer = answer.strip()
+    has_failed = False
+    error_message = "*BZZT* wrong!"
+    for _ in range(retries):
+        program = await _launch_program(
+            "plymouth",
+            type,
+            f"--prompt={prompt} (Hint: It's {answer})",
+            capture_logs=True,
+            eat_stdout=False,
+        )
+        await program.wait()
+        if program.returncode != 0 or program.stdout is None:
+            return False
+
+        result = (await program.stdout.read()).decode("utf-8", errors="replace")
+        if result.strip() == answer:
+            break
+
+        # TODO: I'm vaguely trying to replicate Ubuntu's behaviour here, though
+        # I'm not actually entirely sure how it's reporting the decrypt
+        # failures back to Plymouth and I don't have a spare ubuntu machine on
+        # me right now to test it so who knows.
+        if not has_failed:
+            has_failed = True
+            if not await _launch_and_run(
+                "plymouth",
+                "display-message",
+                f"--text={error_message}",
+            ):
+                return False
+
+    if has_failed:
+        # Plymouth messages are stoked in a stack and have to be cleared with
+        # the exact text, which is... interesting?
+        return await _launch_and_run(
+            "plymouth",
+            "hide-message",
+            f"--text={error_message}",
+        )
+    return True
+
+
 async def _launch_program(
     command: str,
     *args: str,
     capture_logs: bool = True,
+    eat_stdout: bool = True,
 ) -> subprocess.Process:
     logger.debug("Running %s %s", command, " ".join(args))
 
@@ -132,7 +198,8 @@ async def _launch_program(
     )
 
     if capture_logs:
-        asyncio.create_task(_log_reader(command, process.stdout))
+        if eat_stdout:
+            asyncio.create_task(_log_reader(command, process.stdout))
         asyncio.create_task(_log_reader(command, process.stderr))
 
     return process
@@ -228,6 +295,8 @@ class Args(argparse.Namespace):
     ply_debug: bool
     ply_debug_file: str | None
     ply_boot_log_file: str | None
+    ask_question: str | None
+    ask_password: str | None
 
 
 def _positive_integer(raw: str) -> int:
@@ -298,6 +367,22 @@ def _setup_args() -> Args:
         type=os.path.abspath,
         dest="ply_boot_log_file",
         help="Tell plymouthd to output the boot log to this file",
+    )
+    parser.add_argument(
+        "--ask-password",
+        dest="ask_password",
+        metavar="password",
+        nargs="?",
+        const="password",
+        help="Ask the user for a password during startup",
+    )
+    parser.add_argument(
+        "--ask-question",
+        dest="ask_question",
+        metavar="answer",
+        nargs="?",
+        const="answer",
+        help="Ask the user a question during startup",
     )
 
     return parser.parse_args(namespace=Args())
