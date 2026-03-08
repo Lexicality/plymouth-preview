@@ -31,6 +31,16 @@ def main() -> None:
     asyncio.run(_async_main(args))
 
 
+async def _shutdown(plymouthd: subprocess.Process):
+    shutdown = await _launch_program(
+        "plymouth",
+        "--quit",
+        capture_logs=False,
+    )
+    await shutdown.wait()
+    await plymouthd.wait()
+
+
 async def _async_main(args: Args):
     plymouthd = await _launch_plymouthd(args)
     try:
@@ -48,21 +58,10 @@ async def _async_main(args: Args):
                 logger.error("Unknown mode %s", what)
                 return
     finally:
-        if plymouthd.returncode is not None:
-            return
-
-        async def _shutdown():
-            shutdown = await _launch_program(
-                "plymouth",
-                "--quit",
-                capture_logs=False,
-            )
-            await shutdown.wait()
-            await plymouthd.wait()
-
         try:
-            logger.info("Waiting for plymouthd to shut down")
-            await asyncio.wait_for(_shutdown(), timeout=SHUTDOWN_TIMEOUT)
+            if plymouthd.returncode is None:
+                logger.info("Waiting for plymouthd to shut down")
+                await asyncio.wait_for(_shutdown(plymouthd), timeout=SHUTDOWN_TIMEOUT)
         except TimeoutError:
             logger.error("Timed out waiting for shutdown!")
             plymouthd.kill()
